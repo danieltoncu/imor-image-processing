@@ -101,7 +101,7 @@ namespace ImorImageProcessing
                         ImorImage imorImage = new ImorImage()
                         {
                             Uri = "http://www.semanticweb.org/ImagesOntology#" + imageName,
-                            Description = result.description.captions[0].text,
+                            Description = (result.description.captions.Length > 0) ? result.description.captions[0].text : "",
                             Content = createdEvent.Url,
                             Tags = result.description.tags
                         };
