@@ -8,10 +8,9 @@ using ImorImageProcessing.Models;
 using Microsoft.Azure.EventGrid.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.EventGrid;
-using Microsoft.Azure.WebJobs.Host;
 using Microsoft.Extensions.Logging;
-using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.Formats.Gif;
@@ -91,14 +90,25 @@ namespace ImorImageProcessing
 
                         ImageAnalysisInfo result = await AnalyzeImageAsync(createdEvent.Url, log);
 
-                        log.LogInformation(" DONE: " + result.requestId);
-                        log.LogInformation(" DONE: " + result.description.captions[0].text);
-                        log.LogInformation(" DONE: " + result.description.tags[0]);
-                        log.LogInformation(" DONE: " + result.description.tags);
-
-                        log.LogInformation(" ALL: " + result.ToString());
+                        log.LogInformation(" RESULT: RequestId: " + result.requestId);
 
                         log.LogInformation("Analyzing done successfully.");
+
+                        log.LogInformation("Adding data to SPARQL Endpoint ..");
+
+                        string imageName = Path.GetFileNameWithoutExtension(createdEvent.Url);
+
+                        ImorImage imorImage = new ImorImage()
+                        {
+                            Uri = "http://www.semanticweb.org/ImagesOntology#" + imageName,
+                            Description = result.description.captions[0].text,
+                            Content = createdEvent.Url,
+                            Tags = result.description.tags
+                        };
+
+                        await AddImage(imorImage, log);
+
+                        log.LogInformation("Adding data to SPARQL Endpoint done successfully.");
                     }
                     else
                     {
@@ -130,9 +140,48 @@ namespace ImorImageProcessing
                 "{ \"url\": \"" + imageUrl + "\" }", Encoding.UTF8, "application/json");
 
             var results = await client.PostAsync(endpoint + "/analyze?visualFeatures=Description&language=en", content);
+
+            log.LogInformation(results.ToString());
+
+            try
+            {
+                results.EnsureSuccessStatusCode();
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex.Message);
+                throw ex;
+            }
+
             var result = await results.Content.ReadAsAsync<ImageAnalysisInfo>();
 
             return result;
+        }
+
+        private async static Task AddImage(ImorImage imorImage, ILogger log)
+        {
+            HttpClient client = new HttpClient();
+
+            var endpoint = Environment.GetEnvironmentVariable("SparqlEndpoint");
+
+            var content = new StringContent(
+                JsonConvert.SerializeObject(imorImage),
+                Encoding.UTF8,
+                "application/json");
+
+            var results = await client.PostAsync(endpoint + "/images/create", content);
+
+            log.LogInformation(results.ToString());
+
+            try
+            {
+                results.EnsureSuccessStatusCode();
+            }
+            catch (Exception ex)
+            {
+                log.LogError(ex.Message);
+                throw ex;
+            }
         }
 
         private async static Task<byte[]> ToByteArrayAsync(Stream stream)

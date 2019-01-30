@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace ImorImageProcessing.Models
+﻿namespace ImorImageProcessing.Models
 {
     public class Description
     {
